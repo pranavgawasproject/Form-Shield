@@ -1,0 +1,75 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Form Shield</title>
+  <link rel="stylesheet" href="popup.css">
+</head>
+<body>
+  <div class="container">
+    <!-- Header -->
+    <header class="header">
+      <div class="logo">
+        <span class="logo-icon">🛡️</span>
+        <span class="logo-text">Form Shield</span>
+      </div>
+      <span class="version">v1.0</span>
+    </header>
+    
+    <!-- Status Card -->
+    <div class="status-card" id="statusCard">
+      <div class="status-icon" id="statusIcon">✅</div>
+      <div class="status-info">
+        <div class="status-title" id="statusTitle">Protected</div>
+        <div class="status-detail" id="statusDetail">No data saved yet</div>
+      </div>
+    </div>
+    
+    <!-- Stats -->
+    <div class="stats" id="stats">
+      <div class="stat">
+        <div class="stat-value" id="fieldCount">0</div>
+        <div class="stat-label">Fields</div>
+      </div>
+      <div class="stat">
+        <div class="stat-value" id="charCount">0</div>
+        <div class="stat-label">Characters</div>
+      </div>
+      <div class="stat">
+        <div class="stat-value" id="timeAgo">-</div>
+        <div class="stat-label">Saved</div>
+      </div>
+    </div>
+    
+    <!-- Actions -->
+    <div class="actions">
+      <button class="btn btn-primary" id="restoreBtn">
+        <span class="btn-icon">↩️</span>
+        Restore Data
+      </button>
+      <button class="btn btn-secondary" id="saveBtn">
+        <span class="btn-icon">💾</span>
+        Save Now
+      </button>
+    </div>
+    
+    <!-- Footer -->
+    <footer class="footer">
+      <button class="link-btn" id="clearBtn">Clear saved data</button>
+      <span class="separator">•</span>
+      <a href="https://yourwebsite.com" target="_blank" class="link-btn">
+        Get Premium
+      </a>
+    </footer>
+  </div>
+  
+  <!-- Toast Notification -->
+  <div class="toast" id="toast">
+    <span class="toast-icon" id="toastIcon">✅</span>
+    <span class="toast-message" id="toastMessage">Success!</span>
+  </div>
+  
+  <script src="popup.js"></script>
+</body>
+</html>
