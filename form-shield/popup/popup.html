@@ -14,9 +14,9 @@
         <span class="logo-icon">🛡️</span>
         <span class="logo-text">Form Shield</span>
       </div>
-      <span class="version">v1.0</span>
+      <span class="version" id="versionBadge">v1.1</span>
     </header>
-    
+
     <!-- Status Card -->
     <div class="status-card" id="statusCard">
       <div class="status-icon" id="statusIcon">✅</div>
@@ -25,7 +25,7 @@
         <div class="status-detail" id="statusDetail">No data saved yet</div>
       </div>
     </div>
-    
+
     <!-- Stats -->
     <div class="stats" id="stats">
       <div class="stat">
@@ -41,7 +41,7 @@
         <div class="stat-label">Saved</div>
       </div>
     </div>
-    
+
     <!-- Actions -->
     <div class="actions">
       <button class="btn btn-primary" id="restoreBtn">
@@ -53,23 +53,67 @@
         Save Now
       </button>
     </div>
-    
+
+    <!-- Cloud Sync Section -->
+    <div class="cloud-sync">
+      <div class="cloud-sync-header">
+        <span class="cloud-sync-title">☁️ Cloud Sync</span>
+        <span class="cloud-sync-tier" id="tierBadge">FREE</span>
+      </div>
+
+      <!-- Google Drive (Free) -->
+      <div class="cloud-row" id="gdriveRow">
+        <div class="cloud-info">
+          <div class="cloud-name">
+            <span class="cloud-icon">📁</span>
+            Google Drive
+            <span class="cloud-tag free">Free</span>
+          </div>
+          <div class="cloud-detail" id="gdriveDetail">Connect to sync drafts to your own Google Drive.</div>
+        </div>
+        <button class="cloud-btn" id="gdriveBtn">Connect</button>
+      </div>
+
+      <!-- Supabase (Pro) -->
+      <div class="cloud-row" id="supabaseRow">
+        <div class="cloud-info">
+          <div class="cloud-name">
+            <span class="cloud-icon">⚡</span>
+            Form Shield Pro
+            <span class="cloud-tag pro">$5/mo</span>
+          </div>
+          <div class="cloud-detail" id="supabaseDetail">Cross-device sync · unlimited drafts · priority support.</div>
+        </div>
+        <button class="cloud-btn" id="supabaseBtn">Sign in</button>
+      </div>
+
+      <!-- Supabase Sign-in Form (hidden by default) -->
+      <div class="auth-form" id="supabaseAuthForm" hidden>
+        <input type="email" id="supabaseEmail" placeholder="Email" autocomplete="email" />
+        <input type="password" id="supabasePassword" placeholder="Password" autocomplete="current-password" />
+        <div class="auth-form-actions">
+          <button class="cloud-btn small" id="supabaseSignInBtn">Sign in</button>
+          <button class="cloud-btn small secondary" id="supabaseSignUpBtn">Create account</button>
+          <button class="cloud-btn small ghost" id="supabaseCancelBtn">Cancel</button>
+        </div>
+        <div class="auth-form-msg" id="supabaseMsg"></div>
+      </div>
+    </div>
+
     <!-- Footer -->
     <footer class="footer">
       <button class="link-btn" id="clearBtn">Clear saved data</button>
       <span class="separator">•</span>
-      <a href="https://yourwebsite.com" target="_blank" class="link-btn">
-        Get Premium
-      </a>
+      <a href="https://github.com/pranavgawasproject/Form-Shield" target="_blank" class="link-btn">⭐ Star on GitHub</a>
     </footer>
   </div>
-  
+
   <!-- Toast Notification -->
   <div class="toast" id="toast">
     <span class="toast-icon" id="toastIcon">✅</span>
     <span class="toast-message" id="toastMessage">Success!</span>
   </div>
-  
+
   <script src="popup.js"></script>
 </body>
 </html>

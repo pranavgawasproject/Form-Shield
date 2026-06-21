@@ -9,7 +9,7 @@
 }
 
 body {
-  width: 320px;
+  width: 340px;
   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
   background: linear-gradient(135deg, #0f0f1a 0%, #1a1a2e 100%);
   color: #ffffff;
@@ -166,6 +166,191 @@ body {
 
 .btn-icon {
   font-size: 14px;
+}
+
+/* Cloud Sync Section */
+.cloud-sync {
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 12px;
+  padding: 12px;
+  margin-bottom: 16px;
+}
+
+.cloud-sync-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 10px;
+}
+
+.cloud-sync-title {
+  font-size: 13px;
+  font-weight: 600;
+  color: rgba(255, 255, 255, 0.9);
+}
+
+.cloud-sync-tier {
+  font-size: 10px;
+  font-weight: 700;
+  padding: 2px 8px;
+  border-radius: 8px;
+  letter-spacing: 0.5px;
+}
+
+.cloud-sync-tier.free {
+  background: rgba(148, 163, 184, 0.2);
+  color: #94a3b8;
+}
+
+.cloud-sync-tier.pro {
+  background: linear-gradient(135deg, #fbbf24 0%, #f59e0b 100%);
+  color: #000;
+}
+
+.cloud-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 10px;
+  border-radius: 8px;
+  margin-bottom: 6px;
+  transition: background 0.15s ease;
+}
+
+.cloud-row:hover {
+  background: rgba(255, 255, 255, 0.03);
+}
+
+.cloud-info {
+  flex: 1;
+  min-width: 0;
+}
+
+.cloud-name {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  font-weight: 600;
+  margin-bottom: 2px;
+}
+
+.cloud-icon {
+  font-size: 14px;
+}
+
+.cloud-tag {
+  font-size: 9px;
+  font-weight: 700;
+  padding: 1px 6px;
+  border-radius: 6px;
+  letter-spacing: 0.3px;
+  margin-left: 4px;
+}
+
+.cloud-tag.free {
+  background: rgba(74, 222, 128, 0.15);
+  color: #4ade80;
+}
+
+.cloud-tag.pro {
+  background: linear-gradient(135deg, #fbbf24 0%, #f59e0b 100%);
+  color: #000;
+}
+
+.cloud-detail {
+  font-size: 11px;
+  color: rgba(255, 255, 255, 0.55);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.cloud-btn {
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  color: #fff;
+  font-size: 11px;
+  font-weight: 600;
+  padding: 6px 12px;
+  border-radius: 7px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  white-space: nowrap;
+}
+
+.cloud-btn:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.15);
+  transform: translateY(-1px);
+}
+
+.cloud-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.cloud-btn.connected {
+  background: rgba(74, 222, 128, 0.15);
+  border-color: rgba(74, 222, 128, 0.3);
+  color: #4ade80;
+}
+
+.cloud-btn.disabled {
+  opacity: 0.4;
+}
+
+.cloud-btn.small {
+  font-size: 11px;
+  padding: 5px 10px;
+}
+
+.cloud-btn.secondary {
+  background: transparent;
+  border-color: rgba(255, 255, 255, 0.1);
+}
+
+.cloud-btn.ghost {
+  background: transparent;
+  border-color: transparent;
+  color: rgba(255, 255, 255, 0.5);
+}
+
+/* Auth Form */
+.auth-form {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px;
+  background: rgba(0, 0, 0, 0.2);
+  border-radius: 8px;
+  margin-top: 8px;
+}
+
+.auth-form input {
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 6px;
+  padding: 8px 10px;
+  color: #fff;
+  font-size: 12px;
+  outline: none;
+}
+
+.auth-form input:focus {
+  border-color: rgba(74, 222, 128, 0.4);
+}
+
+.auth-form-actions {
+  display: flex;
+  gap: 6px;
+}
+
+.auth-form-msg {
+  font-size: 11px;
+  color: rgba(255, 255, 255, 0.6);
+  min-height: 14px;
 }
 
 /* Footer */

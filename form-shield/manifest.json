@@ -1,23 +1,26 @@
 {
   "manifest_version": 3,
   "name": "Form Shield",
-  "version": "1.0.0",
-  "description": "Never lose form data again. Auto-saves everything you type.",
+  "version": "1.1.0",
+  "description": "Never lose form data again. Auto-saves everything you type — locally, across tabs, and to your own cloud.",
   "permissions": [
     "storage",
-    "activeTab"
+    "activeTab",
+    "identity",
+    "identity.email"
   ],
   "host_permissions": [
     "<all_urls>"
   ],
   "background": {
-    "service_worker": "background.js"
+    "service_worker": "background.js",
+    "type": "module"
   },
   "content_scripts": [
     {
       "matches": ["<all_urls>"],
       "js": ["content.js"],
-      "css": ["styles/badge.css"],
+      "css": ["styles/badge.css", "styles/restore-banner.css"],
       "run_at": "document_idle"
     }
   ],
@@ -33,5 +36,19 @@
     "16": "icons/icon16.png",
     "48": "icons/icon48.png",
     "128": "icons/icon128.png"
-  }
+  },
+  "web_accessible_resources": [
+    {
+      "resources": ["popup/popup.html"],
+      "matches": ["<all_urls>"]
+    }
+  ],
+  "oauth2": {
+    "client_id": "REPLACE_WITH_YOUR_GOOGLE_OAUTH_CLIENT_ID.apps.googleusercontent.com",
+    "scopes": [
+      "https://www.googleapis.com/auth/drive.appfolder",
+      "https://www.googleapis.com/auth/userinfo.email"
+    ]
+  },
+  "key": "REPLACE_WITH_YOUR_EXTENSION_KEY"
 }
