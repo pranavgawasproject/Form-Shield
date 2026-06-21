@@ -1,5 +1,6 @@
 // ============================================
 // FORM SHIELD - Content Script
+// Auto-save + restore + cross-tab sync + restore-on-reload banner
 // ============================================
 
 (function() {
@@ -8,14 +9,17 @@
   // ============================================
   // CONFIGURATION
   // ============================================
-  
+
   const CONFIG = {
     // Save after user stops typing for this many ms
     DEBOUNCE_DELAY: 2000,
-    
+
     // Maximum data age (30 days in ms)
     MAX_DATA_AGE: 30 * 24 * 60 * 60 * 1000,
-    
+
+    // Banner auto-dismiss after this long (15s)
+    BANNER_AUTO_DISMISS_MS: 15000,
+
     // Sites to NEVER run on (banking, health, etc.)
     BLACKLISTED_DOMAINS: [
       'chase.com',
@@ -27,7 +31,7 @@
       'patient.portal',
       'mychart.com'
     ],
-    
+
     // Input types to NEVER save
     EXCLUDED_INPUT_TYPES: [
       'password',
@@ -38,7 +42,7 @@
       'reset',
       'image'
     ],
-    
+
     // Field names that suggest sensitive data
     SENSITIVE_FIELD_PATTERNS: [
       /password/i,
@@ -49,25 +53,30 @@
       /cvc/i,
       /pin/i,
       /secret/i
-    ]
+    ],
+
+    // localStorage key for "dismissed restore" so we don't re-prompt
+    DISMISS_KEY_PREFIX: 'formshield_dismissed_'
   };
 
   // ============================================
   // STATE
   // ============================================
-  
+
   let saveTimeout = null;
   let lastSaveTime = null;
   let characterCount = 0;
   let badge = null;
+  let restoreBanner = null;
+  let currentDraftTimestamp = null; // to avoid echo when we receive remoteUpdate
 
   // ============================================
   // BLACKLIST CHECK
   // ============================================
-  
+
   function isBlacklistedSite() {
     const hostname = window.location.hostname.toLowerCase();
-    return CONFIG.BLACKLISTED_DOMAINS.some(domain => 
+    return CONFIG.BLACKLISTED_DOMAINS.some(domain =>
       hostname.includes(domain)
     );
   }
@@ -75,22 +84,18 @@
   // ============================================
   // SENSITIVE FIELD CHECK
   // ============================================
-  
+
   function isSensitiveField(element) {
-    // Check input type
     if (CONFIG.EXCLUDED_INPUT_TYPES.includes(element.type)) {
       return true;
     }
-    
-    // Check field name/id against sensitive patterns
     const fieldIdentifier = (
-      (element.name || '') + 
-      (element.id || '') + 
+      (element.name || '') +
+      (element.id || '') +
       (element.placeholder || '') +
       (element.getAttribute('aria-label') || '')
     ).toLowerCase();
-    
-    return CONFIG.SENSITIVE_FIELD_PATTERNS.some(pattern => 
+    return CONFIG.SENSITIVE_FIELD_PATTERNS.some(pattern =>
       pattern.test(fieldIdentifier)
     );
   }
@@ -98,7 +103,7 @@
   // ============================================
   // FORM DATA COLLECTION
   // ============================================
-  
+
   function collectFormData() {
     const formData = {
       url: window.location.href,
@@ -107,38 +112,28 @@
       timestamp: Date.now(),
       fields: []
     };
-    
-    // Find all input elements
+
     const inputs = document.querySelectorAll(
       'input, textarea, select, [contenteditable="true"]'
     );
-    
+
     let totalChars = 0;
-    
+
     inputs.forEach((input, index) => {
-      // Skip sensitive fields
-      if (isSensitiveField(input)) {
-        return;
-      }
-      
-      // Get value
+      if (isSensitiveField(input)) return;
+
       let value = '';
       if (input.getAttribute('contenteditable') === 'true') {
         value = input.innerText || input.textContent || '';
       } else {
         value = input.value || '';
       }
-      
-      // Skip empty fields
-      if (!value.trim()) {
-        return;
-      }
-      
+
+      if (!value.trim()) return;
+
       totalChars += value.length;
-      
-      // Create unique identifier for this field
       const fieldId = generateFieldId(input, index);
-      
+
       formData.fields.push({
         id: fieldId,
         tagName: input.tagName.toLowerCase(),
@@ -150,15 +145,13 @@
         charCount: value.length
       });
     });
-    
+
     formData.totalCharacters = totalChars;
     characterCount = totalChars;
-    
     return formData;
   }
-  
+
   function generateFieldId(element, index) {
-    // Create a unique but consistent identifier
     const parts = [
       element.tagName,
       element.type || 'text',
@@ -172,28 +165,23 @@
   // ============================================
   // TRIPLE REDUNDANCY SAVE
   // ============================================
-  
+
   async function saveWithRedundancy(data) {
     const storageKey = `formshield_${data.hostname}`;
-    
+
     const results = await Promise.allSettled([
-      // PRIMARY: Chrome Storage
       saveToChrome(storageKey, data),
-      
-      // BACKUP 1: IndexedDB
       saveToIndexedDB(storageKey, data),
-      
-      // BACKUP 2: localStorage
       saveToLocalStorage(storageKey, data)
     ]);
-    
-    // Check if at least one save succeeded
+
     const successCount = results.filter(
       r => r.status === 'fulfilled' && r.value === true
     ).length;
-    
+
     if (successCount > 0) {
       lastSaveTime = Date.now();
+      currentDraftTimestamp = data.timestamp;
       updateBadge('saved');
       return true;
     } else {
@@ -201,8 +189,7 @@
       return false;
     }
   }
-  
-  // Chrome Storage
+
   async function saveToChrome(key, data) {
     return new Promise((resolve) => {
       try {
@@ -219,22 +206,18 @@
       }
     });
   }
-  
-  // IndexedDB
+
   async function saveToIndexedDB(key, data) {
     return new Promise((resolve) => {
       try {
         const request = indexedDB.open('FormShieldDB', 1);
-        
         request.onerror = () => resolve(false);
-        
         request.onupgradeneeded = (event) => {
           const db = event.target.result;
           if (!db.objectStoreNames.contains('forms')) {
             db.createObjectStore('forms', { keyPath: 'key' });
           }
         };
-        
         request.onsuccess = (event) => {
           try {
             const db = event.target.result;
@@ -252,15 +235,13 @@
       }
     });
   }
-  
-  // localStorage
+
   function saveToLocalStorage(key, data) {
     return new Promise((resolve) => {
       try {
         localStorage.setItem(key, JSON.stringify(data));
         resolve(true);
       } catch (e) {
-        // Might fail if storage is full
         resolve(false);
       }
     });
@@ -269,27 +250,17 @@
   // ============================================
   // RESTORE FUNCTIONALITY
   // ============================================
-  
+
   async function loadSavedData() {
     const hostname = window.location.hostname;
     const storageKey = `formshield_${hostname}`;
-    
-    // Try Chrome Storage first
+
     let data = await loadFromChrome(storageKey);
-    
-    // Fallback to IndexedDB
-    if (!data) {
-      data = await loadFromIndexedDB(storageKey);
-    }
-    
-    // Fallback to localStorage
-    if (!data) {
-      data = loadFromLocalStorage(storageKey);
-    }
-    
+    if (!data) data = await loadFromIndexedDB(storageKey);
+    if (!data) data = loadFromLocalStorage(storageKey);
     return data;
   }
-  
+
   async function loadFromChrome(key) {
     return new Promise((resolve) => {
       try {
@@ -301,7 +272,7 @@
       }
     });
   }
-  
+
   async function loadFromIndexedDB(key) {
     return new Promise((resolve) => {
       try {
@@ -326,7 +297,7 @@
       }
     });
   }
-  
+
   function loadFromLocalStorage(key) {
     try {
       const data = localStorage.getItem(key);
@@ -335,79 +306,221 @@
       return null;
     }
   }
-  
+
   async function restoreFormData() {
     const savedData = await loadSavedData();
-    
+
     if (!savedData || !savedData.fields) {
       return { success: false, message: 'No saved data found' };
     }
-    
-    // Check if data is too old
+
     if (Date.now() - savedData.timestamp > CONFIG.MAX_DATA_AGE) {
       return { success: false, message: 'Saved data is too old' };
     }
-    
+
     let restoredCount = 0;
-    
+
     savedData.fields.forEach((field) => {
       const element = findMatchingElement(field);
-      
       if (element && !isSensitiveField(element)) {
         if (element.getAttribute('contenteditable') === 'true') {
           element.innerText = field.value;
         } else {
           element.value = field.value;
         }
-        
-        // Trigger input event for React/Vue/Angular
         element.dispatchEvent(new Event('input', { bubbles: true }));
         element.dispatchEvent(new Event('change', { bubbles: true }));
-        
         restoredCount++;
       }
     });
-    
-    return { 
-      success: true, 
+
+    currentDraftTimestamp = savedData.timestamp;
+
+    return {
+      success: true,
       message: `Restored ${restoredCount} fields`,
       count: restoredCount
     };
   }
-  
+
   function findMatchingElement(field) {
-    // Try by ID first
     if (field.elementId) {
       const byId = document.getElementById(field.elementId);
       if (byId) return byId;
     }
-    
-    // Try by name
     if (field.name) {
       const byName = document.querySelector(`[name="${field.name}"]`);
       if (byName) return byName;
     }
-    
-    // Try by placeholder
     if (field.placeholder) {
       const byPlaceholder = document.querySelector(
         `[placeholder="${field.placeholder}"]`
       );
       if (byPlaceholder) return byPlaceholder;
     }
-    
     return null;
+  }
+
+  // ============================================
+  // RESTORE-ON-RELOAD BANNER
+  // ============================================
+
+  async function maybeShowRestoreBanner() {
+    try {
+      const savedData = await loadSavedData();
+      if (!savedData || !savedData.fields || savedData.fields.length === 0) return;
+
+      // Too old?
+      if (Date.now() - savedData.timestamp > CONFIG.MAX_DATA_AGE) return;
+
+      // Already restored in this tab? Skip.
+      if (currentDraftTimestamp === savedData.timestamp) return;
+
+      // Dismissed recently?
+      const dismissKey = CONFIG.DISMISS_KEY_PREFIX + window.location.hostname;
+      const dismissedAt = parseInt(localStorage.getItem(dismissKey) || '0', 10);
+      if (Date.now() - dismissedAt < 60 * 60 * 1000) return; // 1h cooldown
+
+      // Only show if user is NOT actively typing on the page
+      const hasUnsavedInputs = Array.from(
+        document.querySelectorAll('input, textarea, [contenteditable="true"]')
+      ).some((el) => {
+        if (isSensitiveField(el)) return false;
+        const v = el.value || el.innerText || '';
+        return v.trim().length > 0;
+      });
+
+      if (hasUnsavedInputs) return; // don't interrupt active typing
+
+      showRestoreBanner(savedData);
+    } catch (e) {
+      // silent
+    }
+  }
+
+  function showRestoreBanner(savedData) {
+    // Remove old banner
+    if (restoreBanner) restoreBanner.remove();
+
+    const timeAgo = getTimeAgo(savedData.timestamp);
+    const fieldCount = savedData.fields.length;
+    const charCount = savedData.totalCharacters || 0;
+
+    restoreBanner = document.createElement('div');
+    restoreBanner.id = 'formshield-restore-banner';
+    restoreBanner.innerHTML = `
+      <div class="formshield-banner-content">
+        <div class="formshield-banner-icon">🛡️</div>
+        <div class="formshield-banner-text">
+          <strong>Form Shield found ${fieldCount} unsaved field${fieldCount === 1 ? '' : 's'}</strong>
+          <span>${charCount} characters · saved ${timeAgo}</span>
+        </div>
+        <div class="formshield-banner-actions">
+          <button class="formshield-banner-btn formshield-restore" type="button">Restore</button>
+          <button class="formshield-banner-btn formshield-dismiss" type="button" aria-label="Dismiss">✕</button>
+        </div>
+      </div>
+    `;
+
+    document.body.appendChild(restoreBanner);
+
+    // Animate in
+    requestAnimationFrame(() => {
+      restoreBanner.classList.add('formshield-banner-visible');
+    });
+
+    // Wire buttons
+    restoreBanner.querySelector('.formshield-restore').addEventListener('click', async () => {
+      const result = await restoreFormData();
+      hideRestoreBanner();
+      if (result.success) {
+        updateBadge('saved');
+      }
+    });
+
+    restoreBanner.querySelector('.formshield-dismiss').addEventListener('click', () => {
+      const dismissKey = CONFIG.DISMISS_KEY_PREFIX + window.location.hostname;
+      try { localStorage.setItem(dismissKey, String(Date.now())); } catch (_) {}
+      hideRestoreBanner();
+    });
+
+    // Auto dismiss
+    setTimeout(() => hideRestoreBanner(), CONFIG.BANNER_AUTO_DISMISS_MS);
+  }
+
+  function hideRestoreBanner() {
+    if (!restoreBanner) return;
+    restoreBanner.classList.remove('formshield-banner-visible');
+    setTimeout(() => {
+      if (restoreBanner) {
+        restoreBanner.remove();
+        restoreBanner = null;
+      }
+    }, 300);
+  }
+
+  // ============================================
+  // CROSS-TAB SYNC
+  // ============================================
+  // When another tab on the same hostname saves data, we receive
+  // 'remoteUpdate' from the background worker and merge values into
+  // our own inputs (without retriggering a save loop).
+
+  function applyRemoteUpdate(data) {
+    if (!data || !data.fields) return;
+    // Skip echo
+    if (data.timestamp === currentDraftTimestamp) return;
+
+    let appliedCount = 0;
+    data.fields.forEach((field) => {
+      const element = findMatchingElement(field);
+      if (!element || isSensitiveField(element)) return;
+
+      const current =
+        element.getAttribute('contenteditable') === 'true'
+          ? element.innerText || ''
+          : element.value || '';
+
+      // Only overwrite empty fields (don't trample what the user is currently typing here)
+      if (current.trim().length > 0) return;
+
+      if (element.getAttribute('contenteditable') === 'true') {
+        element.innerText = field.value;
+      } else {
+        element.value = field.value;
+      }
+      element.dispatchEvent(new Event('input', { bubbles: true }));
+      element.dispatchEvent(new Event('change', { bubbles: true }));
+      appliedCount++;
+    });
+
+    if (appliedCount > 0) {
+      currentDraftTimestamp = data.timestamp;
+      showToast(`🛡️ Synced ${appliedCount} field${appliedCount === 1 ? '' : 's'} from another tab`);
+      updateBadge('saved');
+    }
+  }
+
+  function showToast(message) {
+    const toast = document.createElement('div');
+    toast.className = 'formshield-toast';
+    toast.textContent = message;
+    document.body.appendChild(toast);
+    requestAnimationFrame(() => toast.classList.add('formshield-toast-visible'));
+    setTimeout(() => {
+      toast.classList.remove('formshield-toast-visible');
+      setTimeout(() => toast.remove(), 300);
+    }, 3000);
   }
 
   // ============================================
   // VISUAL BADGE
   // ============================================
-  
+
   function createBadge() {
-    // Remove existing badge if any
     const existing = document.getElementById('formshield-badge');
     if (existing) existing.remove();
-    
+
     badge = document.createElement('div');
     badge.id = 'formshield-badge';
     badge.innerHTML = `
@@ -417,34 +530,32 @@
         <span class="formshield-status"></span>
       </div>
     `;
-    
+
     document.body.appendChild(badge);
-    
-    // Auto-hide after 3 seconds
+
     setTimeout(() => {
       badge.classList.add('formshield-minimized');
     }, 3000);
-    
-    // Show on hover
+
     badge.addEventListener('mouseenter', () => {
       badge.classList.remove('formshield-minimized');
     });
-    
+
     badge.addEventListener('mouseleave', () => {
       setTimeout(() => {
         badge.classList.add('formshield-minimized');
       }, 1000);
     });
   }
-  
+
   function updateBadge(status) {
     if (!badge) return;
-    
+
     const statusEl = badge.querySelector('.formshield-status');
     const textEl = badge.querySelector('.formshield-text');
-    
+
     badge.classList.remove('formshield-minimized');
-    
+
     if (status === 'saved') {
       const timeAgo = getTimeAgo(lastSaveTime);
       statusEl.textContent = `✅ Saved ${timeAgo}`;
@@ -457,50 +568,45 @@
       statusEl.textContent = '⚠️ Save failed';
       badge.className = 'formshield-error';
     }
-    
-    // Re-minimize after 3 seconds
+
     setTimeout(() => {
       badge.classList.add('formshield-minimized');
     }, 3000);
   }
-  
+
   function getTimeAgo(timestamp) {
     if (!timestamp) return 'never';
-    
+
     const seconds = Math.floor((Date.now() - timestamp) / 1000);
-    
+
     if (seconds < 5) return 'just now';
     if (seconds < 60) return `${seconds}s ago`;
     if (seconds < 3600) return `${Math.floor(seconds / 60)}m ago`;
-    
-    return `${Math.floor(seconds / 3600)}h ago`;
+    if (seconds < 86400) return `${Math.floor(seconds / 3600)}h ago`;
+    return `${Math.floor(seconds / 86400)}d ago`;
   }
 
   // ============================================
   // EVENT HANDLERS
   // ============================================
-  
+
   function handleInput(event) {
     const element = event.target;
-    
-    // Check if it's an input element we care about
+
     const isInput = (
       element.tagName === 'INPUT' ||
       element.tagName === 'TEXTAREA' ||
       element.tagName === 'SELECT' ||
       element.getAttribute('contenteditable') === 'true'
     );
-    
+
     if (!isInput) return;
     if (isSensitiveField(element)) return;
-    
-    // Debounce the save
-    if (saveTimeout) {
-      clearTimeout(saveTimeout);
-    }
-    
+
+    if (saveTimeout) clearTimeout(saveTimeout);
+
     updateBadge('saving');
-    
+
     saveTimeout = setTimeout(() => {
       const data = collectFormData();
       if (data.fields.length > 0) {
@@ -508,24 +614,19 @@
       }
     }, CONFIG.DEBOUNCE_DELAY);
   }
-  
+
   function handleBeforeUnload() {
-    // Save immediately before page closes
     const data = collectFormData();
     if (data.fields.length > 0) {
-      // Use synchronous localStorage as last resort
       const key = `formshield_${data.hostname}`;
       try {
         localStorage.setItem(key, JSON.stringify(data));
-      } catch (e) {
-        // Can't do much here
-      }
+      } catch (e) {}
     }
   }
-  
+
   function handleVisibilityChange() {
     if (document.hidden) {
-      // Page is being hidden, save now
       const data = collectFormData();
       if (data.fields.length > 0) {
         saveWithRedundancy(data);
@@ -534,82 +635,90 @@
   }
 
   // ============================================
-  // MESSAGE HANDLER (for popup communication)
+  // MESSAGE HANDLER (from popup + background)
   // ============================================
-  
+
   chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
-    if (request.action === 'restore') {
-      restoreFormData().then(result => {
-        sendResponse(result);
-      });
-      return true; // Keep channel open for async response
-    }
-    
-    if (request.action === 'getStatus') {
-      loadSavedData().then(data => {
-        sendResponse({
+    handleMessage(request)
+      .then(sendResponse)
+      .catch((err) => sendResponse({ success: false, message: err.message }));
+    return true;
+  });
+
+  async function handleMessage(request) {
+    switch (request.action) {
+      case 'restore': {
+        const r = await restoreFormData();
+        hideRestoreBanner();
+        return r;
+      }
+
+      case 'getStatus': {
+        const data = await loadSavedData();
+        return {
           hasSavedData: !!data,
           savedAt: data?.timestamp || null,
           fieldCount: data?.fields?.length || 0,
           charCount: data?.totalCharacters || 0,
           url: data?.url || null
-        });
-      });
-      return true;
+        };
+      }
+
+      case 'saveNow': {
+        const data = collectFormData();
+        const ok = await saveWithRedundancy(data);
+        return { success: ok };
+      }
+
+      case 'clearData': {
+        const hostname = window.location.hostname;
+        const key = `formshield_${hostname}`;
+
+        await Promise.all([
+          new Promise(r => chrome.storage.local.remove([key], r)),
+          new Promise(r => { localStorage.removeItem(key); r(); }),
+        ]);
+
+        hideRestoreBanner();
+        currentDraftTimestamp = null;
+        return { success: true };
+      }
+
+      // From background worker — another tab saved fresh data
+      case 'remoteUpdate': {
+        if (request.hostname !== window.location.hostname) return { ok: true };
+        applyRemoteUpdate(request.data);
+        return { ok: true };
+      }
+
+      default:
+        return { ok: false, error: 'unknown_action' };
     }
-    
-    if (request.action === 'saveNow') {
-      const data = collectFormData();
-      saveWithRedundancy(data).then(success => {
-        sendResponse({ success });
-      });
-      return true;
-    }
-    
-    if (request.action === 'clearData') {
-      const hostname = window.location.hostname;
-      const key = `formshield_${hostname}`;
-      
-      Promise.all([
-        new Promise(r => chrome.storage.local.remove([key], r)),
-        new Promise(r => { localStorage.removeItem(key); r(); })
-      ]).then(() => {
-        sendResponse({ success: true });
-      });
-      return true;
-    }
-  });
+  }
 
   // ============================================
   // INITIALIZATION
   // ============================================
-  
+
   function init() {
-    // Check if site is blacklisted
     if (isBlacklistedSite()) {
       console.log('Form Shield: Disabled on this site for security');
       return;
     }
-    
-    // Check if there are any forms on the page
+
     const hasInputs = document.querySelector(
       'input, textarea, select, [contenteditable="true"]'
     );
-    
-    if (!hasInputs) {
-      return; // No forms, no need to run
-    }
-    
-    // Create visual badge
+
+    if (!hasInputs) return;
+
     createBadge();
-    
-    // Attach event listeners
+
     document.addEventListener('input', handleInput, true);
     document.addEventListener('change', handleInput, true);
     window.addEventListener('beforeunload', handleBeforeUnload);
     document.addEventListener('visibilitychange', handleVisibilityChange);
-    
-    // Watch for dynamically added forms
+
     const observer = new MutationObserver((mutations) => {
       mutations.forEach((mutation) => {
         mutation.addedNodes.forEach((node) => {
@@ -625,20 +734,25 @@
         });
       });
     });
-    
+
     observer.observe(document.body, {
       childList: true,
       subtree: true
     });
-    
+
+    // Restore-on-reload banner — check shortly after load
+    // (delay so we don't flash before the page is interactive)
+    setTimeout(() => {
+      maybeShowRestoreBanner();
+    }, 1500);
+
     console.log('Form Shield: Active and protecting forms');
   }
-  
-  // Wait for DOM to be ready
+
   if (document.readyState === 'loading') {
     document.addEventListener('DOMContentLoaded', init);
   } else {
     init();
   }
-  
+
 })();
